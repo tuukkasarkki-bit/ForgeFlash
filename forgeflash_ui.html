@@ -413,6 +413,67 @@
 
   /* Scrollbar for left panel */
   .spacer { flex: 1; }
+
+  /* ── PNG drag-drop overlay ── */
+  #drop-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(10,11,13,0.88);
+    border: 2px dashed var(--accent);
+    border-radius: var(--r-lg);
+    z-index: 10;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    pointer-events: none;
+  }
+  #drop-overlay.active { display: flex; }
+  #drop-overlay .drop-icon {
+    width: 48px; height: 48px;
+    border: 2px solid var(--accent);
+    border-radius: var(--r-md);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--accent);
+    font-size: 22px;
+  }
+  #drop-overlay p { font-size: 13px; color: var(--accent); letter-spacing: 0.06em; }
+  #drop-overlay small { font-size: 11px; color: var(--text-mid); }
+
+  /* ── Parse result banner ── */
+  #parse-banner {
+    display: none;
+    background: rgba(74,240,200,0.06);
+    border: 1px solid var(--accent-dim);
+    border-radius: var(--r-md);
+    padding: 10px 12px;
+    font-size: 11px;
+    color: var(--text-mid);
+    line-height: 1.7;
+  }
+  #parse-banner .banner-head {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;
+  }
+  #parse-banner .banner-title {
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent);
+  }
+  #parse-banner .banner-close {
+    cursor: pointer; color: var(--text-lo); font-size: 14px; line-height: 1;
+  }
+  #parse-banner .banner-close:hover { color: var(--text-mid); }
+  #parse-banner .tag {
+    display: inline-block; background: var(--bg-input); border: 1px solid var(--border);
+    border-radius: 3px; padding: 1px 6px; margin: 2px 3px 2px 0; font-size: 10px; color: var(--text-hi);
+  }
+
+  /* ── Load PNG button ── */
+  .load-png-btn {
+    background: transparent; border: 1px solid var(--border-hi); border-radius: var(--r-sm);
+    color: var(--text-mid); font-family: var(--font-mono); font-size: 11px;
+    padding: 6px 12px; cursor: pointer; transition: all 0.12s; letter-spacing: 0.05em;
+  }
+  .load-png-btn:hover { border-color: var(--accent-dim); color: var(--accent); }
 </style>
 </head>
 <body>
@@ -456,6 +517,15 @@
 
   <!-- Left: Controls -->
   <div id="left">
+
+    <!-- Parse banner -->
+    <div id="parse-banner">
+      <div class="banner-head">
+        <span class="banner-title">⊕ PNG metadata loaded</span>
+        <span class="banner-close" onclick="document.getElementById('parse-banner').style.display='none'">×</span>
+      </div>
+      <div id="parse-tags"></div>
+    </div>
 
     <!-- Prompt -->
     <div id="prompt-wrap">
@@ -589,6 +659,13 @@
   <div id="right">
     <div id="canvas-area">
 
+      <!-- Drag & drop overlay -->
+      <div id="drop-overlay">
+        <div class="drop-icon">↓</div>
+        <p>Drop PNG to load metadata</p>
+        <small>Reads A1111 / Forge tEXt chunk</small>
+      </div>
+
       <div id="placeholder">
         <div class="ph-grid">
           <div class="ph-cell" style="background:var(--bg-panel)"></div>
@@ -602,6 +679,9 @@
           <div class="ph-cell" style="background:var(--bg-panel)"></div>
         </div>
         <p>Awaiting generation</p>
+        <button class="load-png-btn" onclick="document.getElementById('png-file-input').click()">
+          ⊕ Load PNG metadata
+        </button>
       </div>
 
       <!-- Live preview image -->
@@ -611,10 +691,15 @@
       <div id="img-actions">
         <button class="act-btn" onclick="saveImage()">↓ Save</button>
         <button class="act-btn" onclick="copyImage()">⎘ Copy</button>
+        <button class="act-btn" onclick="document.getElementById('png-file-input').click()">⊕ Load PNG</button>
         <button class="act-btn" onclick="sendToImg2Img()">→ img2img</button>
       </div>
 
     </div>
+
+    <!-- Hidden file input -->
+    <input type="file" id="png-file-input" accept="image/png" style="display:none"
+      onchange="handleFileInput(this.files[0])">
 
     <!-- Progress -->
     <div id="progress-overlay">
@@ -953,6 +1038,236 @@
   function sendToImg2Img() {
     alert('img2img — Milestone 2');
   }
+
+  // ── PNG tEXt chunk parser ─────────────────────────────────────────────────
+  function parsePngMetadata(buffer) {
+    const view  = new DataView(buffer);
+    const bytes = new Uint8Array(buffer);
+    const latin1 = new TextDecoder('latin1');
+    const utf8   = new TextDecoder('utf-8');
+
+    // Validate PNG signature: 137 80 78 71 13 10 26 10
+    const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+    for (let i = 0; i < 8; i++) {
+      if (bytes[i] !== sig[i]) throw new Error('Not a valid PNG file.');
+    }
+
+    let offset = 8;
+    while (offset + 12 <= buffer.byteLength) {
+      const length  = view.getUint32(offset, false);   // big-endian
+      const type    = latin1.decode(bytes.slice(offset + 4, offset + 8));
+      const data    = bytes.slice(offset + 8, offset + 8 + length);
+      offset += 12 + length;                           // length+type+data+CRC
+
+      if (type === 'tEXt') {
+        const nullIdx = data.indexOf(0);
+        if (nullIdx < 0) continue;
+        const keyword = latin1.decode(data.slice(0, nullIdx));
+        if (keyword === 'parameters') {
+          return latin1.decode(data.slice(nullIdx + 1));
+        }
+      }
+
+      if (type === 'iTXt') {
+        // keyword \0 compression_flag(1) compression_method(1) language \0 translated_kw \0 text
+        let pos = data.indexOf(0);
+        if (pos < 0) continue;
+        const keyword = latin1.decode(data.slice(0, pos));
+        pos++;
+        const comprFlag = data[pos++];
+        pos++; // compression method
+        pos = data.indexOf(0, pos) + 1; // skip language tag
+        pos = data.indexOf(0, pos) + 1; // skip translated keyword
+        if (keyword === 'parameters' && comprFlag === 0) {
+          return utf8.decode(data.slice(pos));
+        }
+      }
+
+      if (type === 'IEND') break;
+    }
+    return null; // no parameters chunk found
+  }
+
+  // ── A1111 / Forge parameter string parser ─────────────────────────────────
+  function parseA1111Params(raw) {
+    const result = {};
+    const lines  = raw.split('\n');
+
+    let negIdx   = -1;
+    let paramIdx = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].startsWith('Negative prompt:')) negIdx = i;
+      if (/^Steps:\s*\d+/.test(lines[i]))          paramIdx = i;
+    }
+
+    // Positive prompt — everything before neg or params line
+    const promptEnd = negIdx >= 0 ? negIdx : paramIdx >= 0 ? paramIdx : lines.length;
+    result.prompt = lines.slice(0, promptEnd).join('\n').trim();
+
+    // Negative prompt — lines between negIdx and paramIdx
+    if (negIdx >= 0) {
+      const negEnd  = paramIdx >= 0 ? paramIdx : lines.length;
+      const negLines = lines.slice(negIdx, negEnd);
+      negLines[0]   = negLines[0].replace(/^Negative prompt:\s*/, '');
+      result['Negative prompt'] = negLines.join('\n').trim();
+    }
+
+    // Key-value params — split on ", Key:" boundaries
+    if (paramIdx >= 0) {
+      const paramStr = lines.slice(paramIdx).join(' ');
+      // Split where ", " precedes a known-style "Word:" token
+      const pairs = paramStr.split(/,\s*(?=[A-Za-z][A-Za-z0-9 ]*:)/);
+      for (const pair of pairs) {
+        const colon = pair.indexOf(':');
+        if (colon < 0) continue;
+        const k = pair.slice(0, colon).trim();
+        const v = pair.slice(colon + 1).trim();
+        result[k] = v;
+      }
+    }
+    return result;
+  }
+
+  // ── Populate UI from parsed params ───────────────────────────────────────
+  const AR_LOOKUP = {
+    '1024x1024': '1:1', '1344x768': '16:9', '768x1344': '9:16',
+    '896x1152':  '3:4', '1152x896': '4:3'
+  };
+
+  function populateFromParsed(p) {
+    const loaded = [];
+
+    if (p.prompt) {
+      document.getElementById('prompt').value = p.prompt;
+      loaded.push('Prompt');
+    }
+
+    if (p['Negative prompt']) {
+      document.getElementById('neg-prompt').value = p['Negative prompt'];
+      if (document.getElementById('neg-wrap').style.display === 'none') toggleNeg();
+      loaded.push('Negative');
+    }
+
+    if (p.Steps) {
+      const v = Math.min(Math.max(parseInt(p.Steps), 10), 60);
+      document.getElementById('steps').value = v;
+      document.getElementById('steps-val').textContent = v;
+      loaded.push(`Steps: ${v}`);
+    }
+
+    if (p['CFG scale']) {
+      const v = Math.min(Math.max(parseFloat(p['CFG scale']), 1), 14);
+      document.getElementById('cfg').value = v;
+      document.getElementById('cfg-val').textContent = v.toFixed(1);
+      loaded.push(`CFG: ${v.toFixed(1)}`);
+    }
+
+    if (p.Seed && p.Seed !== '-1') {
+      document.getElementById('seed').value = p.Seed;
+      loaded.push(`Seed: ${p.Seed}`);
+    }
+
+    if (p.Size) {
+      const m = p.Size.match(/(\d+)x(\d+)/);
+      if (m) {
+        currentW = parseInt(m[1]); currentH = parseInt(m[2]);
+        document.getElementById('res-display').textContent = `${currentW} × ${currentH} px`;
+        const arKey = `${currentW}x${currentH}`;
+        const arLabel = AR_LOOKUP[arKey];
+        document.querySelectorAll('.ar-btn').forEach(b => {
+          b.classList.toggle('active', b.querySelector('span')?.textContent === arLabel);
+        });
+        loaded.push(`Size: ${p.Size}`);
+      }
+    }
+
+    // Hi-Res Fix: "Hires upscale" is the Forge/A1111 key
+    if (p['Hires upscale']) {
+      const scale = Math.min(Math.max(parseFloat(p['Hires upscale']), 1.0), 2.0);
+      document.getElementById('hr-scale').value = scale;
+      updateHR(scale);
+      loaded.push(`HR: ${scale.toFixed(2)}×`);
+    }
+
+    if (p['Denoising strength'] && parseFloat(document.getElementById('hr-scale').value) > 1.0) {
+      const v = Math.min(Math.max(parseFloat(p['Denoising strength']), 0.1), 0.8);
+      document.getElementById('denoise').value = v;
+      document.getElementById('denoise-val').textContent = v.toFixed(2);
+      loaded.push(`Denoise: ${v.toFixed(2)}`);
+    }
+
+    // Show banner
+    const banner = document.getElementById('parse-banner');
+    const tags   = document.getElementById('parse-tags');
+    tags.innerHTML = loaded.map(t => `<span class="tag">${t}</span>`).join('');
+    banner.style.display = 'block';
+
+    // Scroll left panel to top so banner is visible
+    document.getElementById('left').scrollTop = 0;
+  }
+
+  // ── File handling (shared by input + drag-drop) ───────────────────────────
+  function handleFileInput(file) {
+    if (!file || file.type !== 'image/png') {
+      showError('Please drop a PNG file.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const raw = parsePngMetadata(e.target.result);
+        if (!raw) {
+          showError('No generation metadata found in this PNG.\nOnly A1111 / Forge generated images are supported.');
+          return;
+        }
+        const parsed = parseA1111Params(raw);
+        populateFromParsed(parsed);
+
+        // Also show the image in the preview area
+        const img = document.getElementById('preview-img');
+        img.src = URL.createObjectURL(file);
+        img.style.display  = 'block';
+        img.style.opacity  = '1';
+        document.getElementById('placeholder').style.display = 'none';
+        document.getElementById('img-actions').style.display = 'flex';
+      } catch(err) {
+        showError('Parse error: ' + err.message);
+      }
+      // Reset file input so the same file can be re-loaded
+      document.getElementById('png-file-input').value = '';
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  // ── Drag & drop on right panel ────────────────────────────────────────────
+  const rightPanel = document.getElementById('right');
+  let dragCounter  = 0; // track nested dragenter/dragleave
+
+  rightPanel.addEventListener('dragenter', e => {
+    e.preventDefault();
+    dragCounter++;
+    if ([...e.dataTransfer.items].some(i => i.type === 'image/png')) {
+      document.getElementById('drop-overlay').classList.add('active');
+    }
+  });
+
+  rightPanel.addEventListener('dragleave', () => {
+    dragCounter--;
+    if (dragCounter <= 0) {
+      dragCounter = 0;
+      document.getElementById('drop-overlay').classList.remove('active');
+    }
+  });
+
+  rightPanel.addEventListener('dragover', e => e.preventDefault());
+
+  rightPanel.addEventListener('drop', e => {
+    e.preventDefault();
+    dragCounter = 0;
+    document.getElementById('drop-overlay').classList.remove('active');
+    const file = e.dataTransfer.files[0];
+    handleFileInput(file);
+  });
 
   // ── Init ──────────────────────────────────────────────────────────────────
   updateHR(document.getElementById('hr-scale').value);
