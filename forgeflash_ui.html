@@ -1017,9 +1017,26 @@
   function saveImage() {
     const img = document.getElementById('preview-img');
     if (!img.src || img.src === window.location.href) return;
+
+    const checkpoint = document.getElementById('model-select')
+      .options[document.getElementById('model-select').selectedIndex]?.text
+      ?.replace(/\.[^.]+$/, '')           // strip .safetensors / .ckpt
+      ?.replace(/[^a-zA-Z0-9_-]/g, '_')  // sanitize for filename
+      || 'unknown';
+
+    const seed = document.getElementById('seed').value || 'noseed';
+
+    const now = new Date();
+    const ts  = now.getFullYear().toString()
+      + String(now.getMonth() + 1).padStart(2, '0')
+      + String(now.getDate()).padStart(2, '0')
+      + String(now.getHours()).padStart(2, '0')
+      + String(now.getMinutes()).padStart(2, '0')
+      + String(now.getSeconds()).padStart(2, '0');
+
     const a = document.createElement('a');
-    a.href = img.src;
-    a.download = `forge_${Date.now()}.png`;
+    a.href     = img.src;
+    a.download = `${checkpoint}-${seed}-${ts}.png`;
     a.click();
   }
 
