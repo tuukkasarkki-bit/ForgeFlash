@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forge UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Syne:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-base:     #0a0b0d;
+    --bg-panel:    #111318;
+    --bg-input:    #181c22;
+    --bg-hover:    #1e232c;
+    --border:      #252a35;
+    --border-hi:   #2e3545;
+    --accent:      #4af0c8;
+    --accent-dim:  #1a6655;
+    --accent-glow: rgba(74, 240, 200, 0.08);
+    --text-hi:     #e8eaf0;
+    --text-mid:    #7a8194;
+    --text-lo:     #3a3f50;
+    --danger:      #ff5f5f;
+    --warn:        #f0a04a;
+    --font-mono:   'JetBrains Mono', monospace;
+    --font-ui:     'Syne', sans-serif;
+    --r-sm:        4px;
+    --r-md:        8px;
+    --r-lg:        12px;
+  }
+
+  body {
+    font-family: var(--font-mono);
+    background: var(--bg-base);
+    color: var(--text-hi);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Topbar ── */
+  #topbar {
+    height: 44px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+  #topbar .logo {
+    font-family: var(--font-ui);
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+    margin-right: 8px;
+  }
+  .tb-sep { width: 1px; height: 18px; background: var(--border); }
+  .tb-label { font-size: 11px; color: var(--text-mid); letter-spacing: 0.08em; text-transform: uppercase; }
+
+  #model-select {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text-hi);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    outline: none;
+  }
+  #model-select:focus { border-color: var(--accent-dim); }
+
+  .tb-status {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-mid);
+  }
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+  }
+  .status-dot.offline { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+
+  /* ── Main layout ── */
+  #main {
+    display: grid;
+    grid-template-columns: 400px 1fr;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Left panel ── */
+  #left {
+    background: var(--bg-panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 16px;
+    gap: 16px;
+  }
+  #left::-webkit-scrollbar { width: 4px; }
+  #left::-webkit-scrollbar-track { background: transparent; }
+  #left::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 2px; }
+
+  .section-label {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-lo);
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+
+  /* Prompt */
+  #prompt-wrap { display: flex; flex-direction: column; gap: 8px; }
+
+  textarea {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    color: var(--text-hi);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 10px 12px;
+    resize: none;
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
+  }
+  textarea::placeholder { color: var(--text-lo); }
+  textarea:focus { border-color: var(--accent-dim); background: var(--bg-hover); }
+
+  #prompt { height: 120px; }
+  #neg-prompt { height: 64px; }
+
+  .neg-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-mid);
+    cursor: pointer;
+    user-select: none;
+  }
+  .neg-toggle:hover { color: var(--text-hi); }
+  .neg-toggle svg { transition: transform 0.2s; }
+  .neg-toggle.open svg { transform: rotate(180deg); }
+
+  /* Divider */
+  .divider { height: 1px; background: var(--border); margin: 0 -16px; }
+
+  /* Aspect ratio */
+  #ar-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+  }
+  .ar-btn {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    color: var(--text-mid);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 6px 4px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.12s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .ar-btn:hover { border-color: var(--border-hi); color: var(--text-hi); }
+  .ar-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-glow);
+  }
+  .ar-icon {
+    background: currentColor;
+    border-radius: 1px;
+    opacity: 0.7;
+  }
+
+  /* Sliders */
+  .slider-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .slider-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .slider-name { font-size: 12px; color: var(--text-mid); }
+  .slider-val {
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 500;
+    min-width: 36px;
+    text-align: right;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 3px;
+    background: var(--bg-input);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+    cursor: pointer;
+    transition: box-shadow 0.12s;
+  }
+  input[type="range"]:hover::-webkit-slider-thumb {
+    box-shadow: 0 0 0 5px rgba(74,240,200,0.15);
+  }
+  .slider-track-fill {
+    position: relative;
+  }
+
+  /* Seed row */
+  .seed-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .seed-input {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    color: var(--text-hi);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 5px 8px;
+    outline: none;
+    width: 100%;
+    transition: border-color 0.15s;
+  }
+  .seed-input:focus { border-color: var(--accent-dim); }
+
+  .icon-btn {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    color: var(--text-mid);
+    cursor: pointer;
+    padding: 5px 7px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.12s;
+  }
+  .icon-btn:hover { border-color: var(--border-hi); color: var(--text-hi); }
+
+  /* Generate button */
+  #gen-btn {
+    width: 100%;
+    padding: 13px;
+    background: var(--accent);
+    color: #001a14;
+    border: none;
+    border-radius: var(--r-md);
+    font-family: var(--font-ui);
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+  }
+  #gen-btn:hover { background: #6af5d5; }
+  #gen-btn:active { transform: scale(0.98); }
+  #gen-btn.abort {
+    background: transparent;
+    border: 1px solid var(--danger);
+    color: var(--danger);
+  }
+  #gen-btn.abort:hover { background: rgba(255,95,95,0.08); }
+
+  /* ── Right panel (preview) ── */
+  #right {
+    background: var(--bg-base);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #canvas-area {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+  }
+
+  #placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    color: var(--text-lo);
+  }
+  #placeholder .ph-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3px;
+    opacity: 0.3;
+  }
+  .ph-cell {
+    width: 40px; height: 40px;
+    border-radius: 2px;
+  }
+  #placeholder p {
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  #preview-img {
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: var(--r-md);
+    display: none;
+    object-fit: contain;
+  }
+
+  /* Progress overlay */
+  #progress-overlay {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: linear-gradient(to top, rgba(10,11,13,0.95), transparent);
+    padding: 32px 24px 20px;
+    display: none;
+  }
+  .prog-bar-track {
+    height: 2px;
+    background: var(--border);
+    border-radius: 1px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  #prog-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 1px;
+    width: 0%;
+    transition: width 0.3s;
+  }
+  .prog-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-mid);
+  }
+  #prog-pct { color: var(--accent); font-weight: 500; }
+
+  /* Image actions overlay */
+  #img-actions {
+    position: absolute;
+    top: 16px; right: 16px;
+    display: none;
+    gap: 6px;
+    flex-direction: column;
+  }
+  .act-btn {
+    background: rgba(17,19,24,0.85);
+    border: 1px solid var(--border-hi);
+    border-radius: var(--r-sm);
+    color: var(--text-mid);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 6px 10px;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+    transition: all 0.12s;
+    white-space: nowrap;
+  }
+  .act-btn:hover { color: var(--text-hi); border-color: var(--border-hi); }
+
+  /* Denoising conditional visibility */
+  #denoise-row { opacity: 0.35; pointer-events: none; transition: opacity 0.2s; }
+  #denoise-row.active { opacity: 1; pointer-events: all; }
+
+  /* Scrollbar for left panel */
+  .spacer { flex: 1; }
+</style>
+</head>
+<body>
+
+<!-- Topbar -->
+<div id="topbar">
+  <span class="logo">FORGE</span>
+  <div class="tb-sep"></div>
+  <span class="tb-label">Host</span>
+  <input id="base-url" type="text" value="http://127.0.0.1:7860"
+    style="background:var(--bg-input);border:1px solid var(--border);color:var(--text-hi);
+           font-family:var(--font-mono);font-size:12px;padding:4px 8px;border-radius:var(--r-sm);
+           outline:none;width:192px;"
+    onchange="onBaseUrlChange()"
+    onkeydown="if(event.key==='Enter')onBaseUrlChange()">
+  <div class="tb-sep"></div>
+  <span class="tb-label">Model</span>
+  <select id="model-select" onchange="setModel(this.value)" style="max-width:220px;">
+    <option value="">— connecting —</option>
+  </select>
+  <div class="icon-btn" title="Refresh models" onclick="fetchModels()" style="margin-left:-4px;">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
+    </svg>
+  </div>
+  <div class="tb-status">
+    <div class="status-dot offline" id="status-dot"></div>
+    <span id="status-text">offline</span>
+    <span id="last-seed" style="margin-left:12px;color:var(--text-lo);display:none;">seed: —</span>
+  </div>
+</div>
+
+<!-- Error toast -->
+<div id="error-toast" style="display:none;position:fixed;bottom:20px;right:20px;z-index:999;
+  background:#1a0a0a;border:1px solid var(--danger);border-radius:var(--r-md);
+  padding:10px 16px;font-size:12px;color:var(--danger);max-width:360px;line-height:1.5;">
+</div>
+
+<!-- Main -->
+<div id="main">
+
+  <!-- Left: Controls -->
+  <div id="left">
+
+    <!-- Prompt -->
+    <div id="prompt-wrap">
+      <div class="section-label">Prompt</div>
+      <textarea id="prompt" placeholder="a nordic coastal village at twilight, volumetric fog, cinematic lighting, ultra detailed..."></textarea>
+
+      <div class="neg-toggle" id="neg-toggle" onclick="toggleNeg()">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M2 4L6 8L10 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>Negative prompt</span>
+      </div>
+      <div id="neg-wrap" style="display:none;">
+        <textarea id="neg-prompt" placeholder="blurry, watermark, low quality, overexposed, cartoon..."></textarea>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Aspect ratio -->
+    <div>
+      <div class="section-label">Aspect ratio</div>
+      <div id="ar-grid">
+        <div class="ar-btn active" onclick="selectAR(this,'1024','1024')" title="1024×1024">
+          <div class="ar-icon" style="width:18px;height:18px;"></div>
+          <span>1:1</span>
+        </div>
+        <div class="ar-btn" onclick="selectAR(this,'1344','768')" title="1344×768">
+          <div class="ar-icon" style="width:22px;height:14px;"></div>
+          <span>16:9</span>
+        </div>
+        <div class="ar-btn" onclick="selectAR(this,'768','1344')" title="768×1344">
+          <div class="ar-icon" style="width:14px;height:22px;"></div>
+          <span>9:16</span>
+        </div>
+        <div class="ar-btn" onclick="selectAR(this,'896','1152')" title="896×1152">
+          <div class="ar-icon" style="width:15px;height:20px;"></div>
+          <span>3:4</span>
+        </div>
+        <div class="ar-btn" onclick="selectAR(this,'1152','896')" title="1152×896">
+          <div class="ar-icon" style="width:20px;height:15px;"></div>
+          <span>4:3</span>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text-lo);margin-top:6px;" id="res-display">1024 × 1024 px</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Hi-Res Scale — first class citizen -->
+    <div>
+      <div class="section-label">Hi-Res Fix</div>
+      <div class="slider-row" style="margin-bottom:12px;">
+        <div class="slider-head">
+          <span class="slider-name">Hr-scale</span>
+          <span class="slider-val" id="hr-val">1.50×</span>
+        </div>
+        <input type="range" id="hr-scale" min="1.0" max="2.0" step="0.05" value="1.5"
+          oninput="updateHR(this.value)">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-lo);margin-top:2px;">
+          <span>1.0 — off</span>
+          <span>1.5 — balanced</span>
+          <span>2.0 — max</span>
+        </div>
+      </div>
+
+      <div class="slider-row" id="denoise-row">
+        <div class="slider-head">
+          <span class="slider-name">Denoising strength</span>
+          <span class="slider-val" id="denoise-val">0.35</span>
+        </div>
+        <input type="range" id="denoise" min="0.1" max="0.8" step="0.05" value="0.35"
+          oninput="document.getElementById('denoise-val').textContent=parseFloat(this.value).toFixed(2)">
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Steps & CFG (collapsed secondary) -->
+    <div>
+      <div class="section-label">Sampling</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="slider-row">
+          <div class="slider-head">
+            <span class="slider-name">Steps</span>
+            <span class="slider-val" id="steps-val">30</span>
+          </div>
+          <input type="range" id="steps" min="10" max="60" step="1" value="30"
+            oninput="document.getElementById('steps-val').textContent=this.value">
+        </div>
+        <div class="slider-row">
+          <div class="slider-head">
+            <span class="slider-name">CFG scale</span>
+            <span class="slider-val" id="cfg-val">5.5</span>
+          </div>
+          <input type="range" id="cfg" min="1" max="14" step="0.5" value="5.5"
+            oninput="document.getElementById('cfg-val').textContent=parseFloat(this.value).toFixed(1)">
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Seed -->
+    <div>
+      <div class="section-label">Seed</div>
+      <div class="seed-row">
+        <input class="seed-input" type="number" id="seed" value="-1" placeholder="-1 = random">
+        <div class="icon-btn" title="Randomize" onclick="document.getElementById('seed').value=-1">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
+          </svg>
+        </div>
+        <div class="icon-btn" title="Lock seed" id="lock-btn" onclick="toggleLock()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" id="lock-icon">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+    <div class="divider"></div>
+
+    <!-- Generate -->
+    <button id="gen-btn" onclick="toggleGenerate()">Generate</button>
+
+  </div>
+
+  <!-- Right: Preview -->
+  <div id="right">
+    <div id="canvas-area">
+
+      <div id="placeholder">
+        <div class="ph-grid">
+          <div class="ph-cell" style="background:var(--bg-panel)"></div>
+          <div class="ph-cell" style="background:var(--bg-hover)"></div>
+          <div class="ph-cell" style="background:var(--bg-panel)"></div>
+          <div class="ph-cell" style="background:var(--bg-hover)"></div>
+          <div class="ph-cell" style="background:var(--bg-panel)"></div>
+          <div class="ph-cell" style="background:var(--bg-hover)"></div>
+          <div class="ph-cell" style="background:var(--bg-panel)"></div>
+          <div class="ph-cell" style="background:var(--bg-hover)"></div>
+          <div class="ph-cell" style="background:var(--bg-panel)"></div>
+        </div>
+        <p>Awaiting generation</p>
+      </div>
+
+      <!-- Live preview image -->
+      <img id="preview-img" alt="Generated image" />
+
+      <!-- Image action buttons -->
+      <div id="img-actions">
+        <button class="act-btn" onclick="saveImage()">↓ Save</button>
+        <button class="act-btn" onclick="copyImage()">⎘ Copy</button>
+        <button class="act-btn" onclick="sendToImg2Img()">→ img2img</button>
+      </div>
+
+    </div>
+
+    <!-- Progress -->
+    <div id="progress-overlay">
+      <div class="prog-bar-track">
+        <div id="prog-bar-fill"></div>
+      </div>
+      <div class="prog-meta">
+        <span id="prog-step">Step 0 / 30</span>
+        <span id="prog-eta">ETA —</span>
+        <span id="prog-pct">0%</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ── State ────────────────────────────────────────────────────────────────
+  let generating    = false;
+  let pollInterval  = null;
+  let healthInterval = null;
+  let currentW      = 1024;
+  let currentH      = 1024;
+  let seedLocked    = false;
+  let backendOnline = false;
+
+  function baseUrl() {
+    return document.getElementById('base-url').value.replace(/\/$/, '');
+  }
+
+  // ── Toast ────────────────────────────────────────────────────────────────
+  let toastTimer = null;
+  function showError(msg) {
+    const t = document.getElementById('error-toast');
+    t.textContent = msg;
+    t.style.display = 'block';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.style.display = 'none'; }, 6000);
+  }
+
+  // ── Backend health ───────────────────────────────────────────────────────
+  async function checkHealth() {
+    try {
+      const r = await fetch(`${baseUrl()}/sdapi/v1/progress`, { signal: AbortSignal.timeout(2500) });
+      if (!r.ok) throw new Error();
+      setOnline(true);
+    } catch {
+      setOnline(false);
+    }
+  }
+
+  function setOnline(online) {
+    backendOnline = online;
+    const dot  = document.getElementById('status-dot');
+    const txt  = document.getElementById('status-text');
+    const btn  = document.getElementById('gen-btn');
+    dot.classList.toggle('offline', !online);
+    txt.textContent  = online ? baseUrl().replace('http://', '') : 'offline';
+    btn.disabled     = !online && !generating;
+    btn.style.opacity = (!online && !generating) ? '0.4' : '';
+  }
+
+  function onBaseUrlChange() {
+    checkHealth();
+    fetchModels();
+  }
+
+  // ── Model list ───────────────────────────────────────────────────────────
+  async function fetchModels() {
+    try {
+      const r    = await fetch(`${baseUrl()}/sdapi/v1/sd-models`, { signal: AbortSignal.timeout(4000) });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const list = await r.json();
+      const sel  = document.getElementById('model-select');
+      const prev = sel.value;
+
+      // Get currently loaded model title from options endpoint
+      let activeName = '';
+      try {
+        const opts = await fetch(`${baseUrl()}/sdapi/v1/options`);
+        const optsJson = await opts.json();
+        activeName = optsJson.sd_model_checkpoint || '';
+      } catch {}
+
+      sel.innerHTML = '';
+      list.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.title;
+        opt.textContent = m.model_name;
+        if (m.title === activeName || m.title === prev) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      setOnline(true);
+    } catch (e) {
+      setOnline(false);
+    }
+  }
+
+  async function setModel(title) {
+    if (!title) return;
+    try {
+      await fetch(`${baseUrl()}/sdapi/v1/options`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sd_model_checkpoint: title })
+      });
+    } catch (e) {
+      showError('Model switch failed: ' + e.message);
+    }
+  }
+
+  // ── UI helpers ───────────────────────────────────────────────────────────
+  function toggleNeg() {
+    const wrap   = document.getElementById('neg-wrap');
+    const toggle = document.getElementById('neg-toggle');
+    const open   = wrap.style.display === 'none';
+    wrap.style.display = open ? 'block' : 'none';
+    toggle.classList.toggle('open', open);
+  }
+
+  function selectAR(el, w, h) {
+    document.querySelectorAll('.ar-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    currentW = parseInt(w); currentH = parseInt(h);
+    document.getElementById('res-display').textContent = `${w} × ${h} px`;
+  }
+
+  function updateHR(v) {
+    const val = parseFloat(v);
+    document.getElementById('hr-val').textContent = val <= 1.0 ? '1.00× (off)' : val.toFixed(2) + '×';
+    document.getElementById('denoise-row').classList.toggle('active', val > 1.0);
+  }
+
+  function toggleLock() {
+    seedLocked = !seedLocked;
+    const btn = document.getElementById('lock-btn');
+    btn.style.borderColor = seedLocked ? 'var(--accent)' : '';
+    btn.style.color       = seedLocked ? 'var(--accent)' : '';
+    const seedEl = document.getElementById('seed');
+    if (seedLocked && seedEl.value === '-1') {
+      seedEl.value = Math.floor(Math.random() * 4294967295);
+    }
+  }
+
+  function lockControls(lock) {
+    document.querySelectorAll('#left input, #left textarea, #left select, .ar-btn')
+      .forEach(el => { el.disabled = lock; el.style.opacity = lock ? '0.45' : ''; });
+  }
+
+  // ── Generate ─────────────────────────────────────────────────────────────
+  function toggleGenerate() {
+    if (!generating) startGeneration();
+    else abortGeneration();
+  }
+
+  async function startGeneration() {
+    const prompt = document.getElementById('prompt').value.trim();
+    if (!prompt) { showError('Prompt cannot be empty.'); return; }
+
+    generating = true;
+    const btn = document.getElementById('gen-btn');
+    btn.textContent = 'Abort';
+    btn.classList.add('abort');
+    btn.disabled = false;
+    btn.style.opacity = '';
+
+    document.getElementById('placeholder').style.display     = 'none';
+    document.getElementById('img-actions').style.display     = 'none';
+    document.getElementById('progress-overlay').style.display = 'block';
+    document.getElementById('preview-img').style.display     = 'none';
+    document.getElementById('prog-bar-fill').style.width     = '0%';
+    document.getElementById('prog-pct').textContent          = '0%';
+    document.getElementById('prog-step').textContent         = 'Starting…';
+    document.getElementById('prog-eta').textContent          = '';
+    lockControls(true);
+
+    // Start progress polling immediately
+    pollInterval = setInterval(pollProgress, 500);
+
+    // Build payload
+    const hrScale    = parseFloat(document.getElementById('hr-scale').value);
+    const hrEnabled  = hrScale > 1.0;
+    const payload = {
+      prompt:           prompt,
+      negative_prompt:  document.getElementById('neg-prompt').value.trim(),
+      seed:             parseInt(document.getElementById('seed').value) || -1,
+      steps:            parseInt(document.getElementById('steps').value),
+      cfg_scale:        parseFloat(document.getElementById('cfg').value),
+      width:            currentW,
+      height:           currentH,
+      sampler_name:     'DPM++ 2M',
+      scheduler:        'Karras',
+      enable_hr:        hrEnabled,
+      hr_scale:         hrEnabled ? hrScale : 1.0,
+      hr_upscaler:      'Latent',
+      hr_second_pass_steps: hrEnabled ? Math.round(parseInt(document.getElementById('steps').value) * 0.5) : 0,
+      denoising_strength: hrEnabled ? parseFloat(document.getElementById('denoise').value) : 0.35,
+      override_settings: { sd_vae: 'Automatic' }
+    };
+
+    try {
+      const r = await fetch(`${baseUrl()}/sdapi/v1/txt2img`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload)
+      });
+
+      if (!r.ok) {
+        const errBody = await r.text();
+        if (errBody.toLowerCase().includes('cuda') || errBody.toLowerCase().includes('out of memory')) {
+          showError('CUDA out of memory — reduce Hi-Res scale or image resolution.');
+        } else {
+          showError(`API error ${r.status}: ${errBody.slice(0, 200)}`);
+        }
+        resetUI();
+        return;
+      }
+
+      const data = await r.json();
+      finishGeneration(data);
+
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        showError('Connection failed: ' + e.message);
+      }
+      resetUI();
+    }
+  }
+
+  // ── Progress polling ──────────────────────────────────────────────────────
+  async function pollProgress() {
+    try {
+      const r = await fetch(`${baseUrl()}/sdapi/v1/progress?skip_current_image=false`,
+        { signal: AbortSignal.timeout(2000) });
+      if (!r.ok) return;
+      const d = await r.json();
+
+      const pct  = Math.round((d.progress || 0) * 100);
+      const eta  = d.eta_relative != null ? d.eta_relative.toFixed(1) + 's' : '—';
+      const step = d.state ? `Step ${d.state.sampling_step} / ${d.state.sampling_steps}` : `${pct}%`;
+
+      document.getElementById('prog-bar-fill').style.width = pct + '%';
+      document.getElementById('prog-pct').textContent      = pct + '%';
+      document.getElementById('prog-step').textContent     = step;
+      document.getElementById('prog-eta').textContent      = `ETA ${eta}`;
+
+      // Live preview
+      if (d.current_image) {
+        const img = document.getElementById('preview-img');
+        img.src          = 'data:image/png;base64,' + d.current_image;
+        img.style.display = 'block';
+        img.style.opacity = '0.6';
+      }
+    } catch { /* ignore transient failures */ }
+  }
+
+  // ── Finish ────────────────────────────────────────────────────────────────
+  function finishGeneration(data) {
+    clearInterval(pollInterval);
+    pollInterval = null;
+    generating   = false;
+
+    // Parse info for used seed
+    try {
+      const info = JSON.parse(data.info);
+      const usedSeed = info.seed ?? info.all_seeds?.[0] ?? '?';
+      const seedEl = document.getElementById('last-seed');
+      seedEl.textContent   = `seed: ${usedSeed}`;
+      seedEl.style.display = 'inline';
+      // Auto-populate seed field if locked
+      if (seedLocked) document.getElementById('seed').value = usedSeed;
+    } catch {}
+
+    // Display image
+    const img = document.getElementById('preview-img');
+    if (data.images && data.images[0]) {
+      img.src          = 'data:image/png;base64,' + data.images[0];
+      img.style.display = 'block';
+      img.style.opacity = '1';
+    }
+
+    document.getElementById('progress-overlay').style.display = 'none';
+    document.getElementById('img-actions').style.display      = 'flex';
+    resetUI(false);
+  }
+
+  // ── Abort ─────────────────────────────────────────────────────────────────
+  async function abortGeneration() {
+    try {
+      await fetch(`${baseUrl()}/sdapi/v1/interrupt`, { method: 'POST' });
+    } catch {}
+    clearInterval(pollInterval);
+    pollInterval = null;
+    resetUI(true);
+  }
+
+  // ── Reset ─────────────────────────────────────────────────────────────────
+  function resetUI(showPlaceholder = true) {
+    generating = false;
+    const btn = document.getElementById('gen-btn');
+    btn.textContent   = 'Generate';
+    btn.classList.remove('abort');
+    btn.disabled      = !backendOnline;
+    btn.style.opacity = !backendOnline ? '0.4' : '';
+    document.getElementById('progress-overlay').style.display = 'none';
+    if (showPlaceholder) {
+      document.getElementById('placeholder').style.display    = 'flex';
+      document.getElementById('preview-img').style.display    = 'none';
+    }
+    lockControls(false);
+    updateHR(document.getElementById('hr-scale').value);
+  }
+
+  // ── Image actions ─────────────────────────────────────────────────────────
+  function saveImage() {
+    const img = document.getElementById('preview-img');
+    if (!img.src || img.src === window.location.href) return;
+    const a = document.createElement('a');
+    a.href = img.src;
+    a.download = `forge_${Date.now()}.png`;
+    a.click();
+  }
+
+  async function copyImage() {
+    const img = document.getElementById('preview-img');
+    if (!img.src) return;
+    try {
+      const r    = await fetch(img.src);
+      const blob = await r.blob();
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    } catch (e) {
+      showError('Clipboard copy failed: ' + e.message);
+    }
+  }
+
+  function sendToImg2Img() {
+    alert('img2img — Milestone 2');
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  updateHR(document.getElementById('hr-scale').value);
+  document.getElementById('gen-btn').disabled    = true;
+  document.getElementById('gen-btn').style.opacity = '0.4';
+
+  // Health check every 5s + initial model fetch
+  checkHealth().then(() => { if (backendOnline) fetchModels(); });
+  healthInterval = setInterval(() => {
+    if (!generating) checkHealth();
+  }, 5000);
+</script>
+</body>
+</html>
