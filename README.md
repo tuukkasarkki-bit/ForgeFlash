@@ -1,6 +1,7 @@
 # Forge UI
 
 A clean, minimal frontend for [Stable Diffusion WebUI Forge](https://github.com/lllyasviel/stable-diffusion-webui-forge) — inspired by Fooocus's streamlined workflow but with direct access to the controls that actually matter.
+<img width="1454" height="854" alt="image" src="https://github.com/user-attachments/assets/ec44fb3f-597b-42a4-ba3b-dd77fb04e136" />
 
 
 ---
