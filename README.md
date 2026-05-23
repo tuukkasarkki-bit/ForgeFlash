@@ -27,6 +27,7 @@ The default Gradio interface is powerful but noisy. Fooocus is clean but opinion
 - Seed display and lock after each generation
 - Abort via `/sdapi/v1/interrupt`
 - CUDA OOM error detection with human-readable messages
+- PNG metadata retrieval
 - Nordic Noir dark theme — JetBrains Mono + Syne
 
 ---
