@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Forge UI</title>
+<title>ForgeFlash UI</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Syne:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -95,7 +95,7 @@
   /* ── Main layout ── */
   #main {
     display: grid;
-    grid-template-columns: 400px 1fr;
+    grid-template-columns: 460px 1fr;
     flex: 1;
     overflow: hidden;
   }
@@ -144,8 +144,8 @@
   textarea::placeholder { color: var(--text-lo); }
   textarea:focus { border-color: var(--accent-dim); background: var(--bg-hover); }
 
-  #prompt { height: 120px; }
-  #neg-prompt { height: 64px; }
+  #prompt { height: 220px; }
+  #neg-prompt { height: 52px; }
 
   .neg-toggle {
     display: flex;
@@ -474,13 +474,56 @@
     padding: 6px 12px; cursor: pointer; transition: all 0.12s; letter-spacing: 0.05em;
   }
   .load-png-btn:hover { border-color: var(--accent-dim); color: var(--accent); }
+
+  /* ── Button row ── */
+  #btn-row { display: flex; gap: 8px; }
+
+  #batch-btn {
+    flex-shrink: 0; padding: 13px 14px;
+    background: transparent; border: 1px solid var(--border-hi); border-radius: var(--r-md);
+    font-family: var(--font-ui); font-weight: 700; font-size: 12px; color: var(--text-mid);
+    cursor: pointer; transition: all 0.15s; text-transform: uppercase;
+    letter-spacing: 0.06em; white-space: nowrap;
+  }
+  #batch-btn:hover:not(:disabled) { border-color: var(--accent-dim); color: var(--accent); }
+  #batch-btn.abort { border-color: var(--danger); color: var(--danger); }
+  #batch-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Thumbnail strip ── */
+  #thumb-strip {
+    display: none; flex-direction: row; gap: 8px;
+    padding: 10px 16px; background: var(--bg-panel);
+    border-top: 1px solid var(--border);
+    overflow-x: auto; flex-shrink: 0; height: 96px; align-items: center;
+  }
+  #thumb-strip::-webkit-scrollbar { height: 3px; }
+  #thumb-strip::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 2px; }
+
+  .thumb { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: default; flex-shrink: 0; }
+  .thumb.done { cursor: pointer; }
+  .thumb-img {
+    width: 56px; height: 56px; background: var(--bg-input);
+    border: 1px solid var(--border); border-radius: var(--r-sm);
+    background-size: cover; background-position: center; transition: border-color 0.12s;
+  }
+  .thumb span { font-size: 10px; color: var(--text-lo); letter-spacing: 0.06em; }
+  .thumb.pending .thumb-img   { opacity: 0.3; }
+  .thumb.current .thumb-img   { border-color: var(--warn); box-shadow: 0 0 6px rgba(240,160,74,0.3); }
+  .thumb.done .thumb-img      { border-color: var(--border-hi); }
+  .thumb.done:hover .thumb-img { border-color: var(--accent-dim); }
+  .thumb.selected .thumb-img  { border-color: var(--accent); }
+  .thumb.done span            { color: var(--text-mid); }
+
+  /* Right panel reflow for thumb strip */
+  #right { align-items: stretch; justify-content: flex-start; }
+  #canvas-area { flex: 1; display: flex; align-items: center; justify-content: center; }
 </style>
 </head>
 <body>
 
 <!-- Topbar -->
 <div id="topbar">
-  <span class="logo">FORGE</span>
+  <span class="logo">FORGE FLASH</span>
   <div class="tb-sep"></div>
   <span class="tb-label">Host</span>
   <input id="base-url" type="text" value="http://127.0.0.1:7860"
@@ -650,8 +693,11 @@
     <div class="spacer"></div>
     <div class="divider"></div>
 
-    <!-- Generate -->
-    <button id="gen-btn" onclick="toggleGenerate()">Generate</button>
+    <!-- Generate + Batch AR -->
+    <div id="btn-row">
+      <button id="gen-btn" onclick="toggleGenerate()" style="flex:1">Generate</button>
+      <button id="batch-btn" onclick="toggleBatchAR()" disabled>Batch AR</button>
+    </div>
 
   </div>
 
@@ -696,6 +742,9 @@
       </div>
 
     </div>
+
+    <!-- Thumbnail strip (batch AR results) -->
+    <div id="thumb-strip"></div>
 
     <!-- Hidden file input -->
     <input type="file" id="png-file-input" accept="image/png" style="display:none"
@@ -757,9 +806,11 @@
     const txt  = document.getElementById('status-text');
     const btn  = document.getElementById('gen-btn');
     dot.classList.toggle('offline', !online);
-    txt.textContent  = online ? baseUrl().replace('http://', '') : 'offline';
-    btn.disabled     = !online && !generating;
+    txt.textContent   = online ? baseUrl().replace('http://', '') : 'offline';
+    btn.disabled      = !online && !generating;
     btn.style.opacity = (!online && !generating) ? '0.4' : '';
+    const batchBtn = document.getElementById('batch-btn');
+    if (batchBtn) batchBtn.disabled = !online && !generating;
   }
 
   function onBaseUrlChange() {
@@ -1285,6 +1336,181 @@
     const file = e.dataTransfer.files[0];
     handleFileInput(file);
   });
+
+  // ── AR presets (shared between selector and batch) ───────────────────────
+  const AR_PRESETS = [
+    { label: '1:1',  w: 1024, h: 1024 },
+    { label: '16:9', w: 1344, h: 768  },
+    { label: '9:16', w: 768,  h: 1344 },
+    { label: '3:4',  w: 896,  h: 1152 },
+    { label: '4:3',  w: 1152, h: 896  },
+  ];
+
+  // ── Batch AR ──────────────────────────────────────────────────────────────
+  function toggleBatchAR() {
+    if (!generating) startBatchAR();
+    else abortGeneration();
+  }
+
+  async function startBatchAR() {
+    const prompt = document.getElementById('prompt').value.trim();
+    if (!prompt) { showError('Prompt cannot be empty.'); return; }
+
+    generating = true;
+    document.getElementById('gen-btn').disabled    = true;
+    document.getElementById('gen-btn').style.opacity = '0.4';
+    const batchBtn = document.getElementById('batch-btn');
+    batchBtn.textContent = 'Abort';
+    batchBtn.classList.add('abort');
+    batchBtn.disabled = false;
+    batchBtn.style.opacity = '';
+
+    document.getElementById('placeholder').style.display      = 'none';
+    document.getElementById('img-actions').style.display      = 'none';
+    document.getElementById('progress-overlay').style.display = 'block';
+    document.getElementById('preview-img').style.display      = 'none';
+    document.getElementById('prog-bar-fill').style.width      = '0%';
+
+    // Build and show thumbnail placeholders
+    const strip = document.getElementById('thumb-strip');
+    strip.style.display = 'flex';
+    strip.innerHTML = '';
+    AR_PRESETS.forEach((ar, i) => {
+      const el = document.createElement('div');
+      el.className = 'thumb pending';
+      el.id = `thumb-${i}`;
+      el.innerHTML = `<div class="thumb-img"></div><span>${ar.label}</span>`;
+      strip.appendChild(el);
+    });
+
+    lockControls(true);
+
+    // Base payload — same as single generate
+    const hrScale   = parseFloat(document.getElementById('hr-scale').value);
+    const hrEnabled = hrScale > 1.0;
+    const basePayload = {
+      prompt:               prompt,
+      negative_prompt:      document.getElementById('neg-prompt').value.trim(),
+      seed:                 parseInt(document.getElementById('seed').value) || -1,
+      steps:                parseInt(document.getElementById('steps').value),
+      cfg_scale:            parseFloat(document.getElementById('cfg').value),
+      sampler_name:         'DPM++ 2M',
+      scheduler:            'Karras',
+      enable_hr:            hrEnabled,
+      hr_scale:             hrEnabled ? hrScale : 1.0,
+      hr_upscaler:          'Latent',
+      hr_second_pass_steps: hrEnabled ? Math.round(parseInt(document.getElementById('steps').value) * 0.5) : 0,
+      denoising_strength:   hrEnabled ? parseFloat(document.getElementById('denoise').value) : 0.35,
+      override_settings:    { sd_vae: 'Automatic' }
+    };
+
+    for (let i = 0; i < AR_PRESETS.length; i++) {
+      if (!generating) break;
+
+      const ar = AR_PRESETS[i];
+
+      // Highlight current thumb
+      document.querySelectorAll('.thumb').forEach(t => t.classList.remove('current'));
+      document.getElementById(`thumb-${i}`).classList.add('current');
+
+      document.getElementById('prog-bar-fill').style.width = '0%';
+      document.getElementById('prog-pct').textContent      = '0%';
+      document.getElementById('prog-step').textContent     = `Batch AR: ${i + 1} / ${AR_PRESETS.length} — ${ar.label}`;
+      document.getElementById('prog-eta').textContent      = '';
+
+      pollInterval = setInterval(pollProgress, 500);
+
+      try {
+        const r = await fetch(`${baseUrl()}/sdapi/v1/txt2img`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ ...basePayload, width: ar.w, height: ar.h })
+        });
+
+        clearInterval(pollInterval);
+        pollInterval = null;
+
+        if (!r.ok) {
+          const errBody = await r.text();
+          showError(errBody.toLowerCase().includes('cuda')
+            ? `CUDA out of memory at ${ar.label} — batch stopped.`
+            : `API error ${r.status} at ${ar.label}`);
+          break;
+        }
+
+        const data = await r.json();
+
+        // Parse used seed
+        let usedSeed = '?';
+        try { const info = JSON.parse(data.info); usedSeed = info.seed ?? info.all_seeds?.[0] ?? '?'; } catch {}
+
+        const b64 = data.images[0];
+
+        // Update main preview with latest result
+        const mainImg = document.getElementById('preview-img');
+        mainImg.src          = 'data:image/png;base64,' + b64;
+        mainImg.style.display = 'block';
+        mainImg.style.opacity = '1';
+
+        // Populate thumbnail
+        const thumb = document.getElementById(`thumb-${i}`);
+        thumb.classList.remove('pending', 'current');
+        thumb.classList.add('done');
+        const thumbImg = thumb.querySelector('.thumb-img');
+        thumbImg.style.backgroundImage = `url('data:image/png;base64,${b64}')`;
+        // Click thumbnail to recall image
+        const captured = b64;
+        thumb.onclick = () => {
+          mainImg.src = 'data:image/png;base64,' + captured;
+          document.querySelectorAll('.thumb').forEach(t => t.classList.remove('selected'));
+          thumb.classList.add('selected');
+        };
+
+        // Auto-save with AR label in filename
+        batchAutoSave(b64, usedSeed, ar.label);
+
+        document.getElementById('last-seed').textContent   = `seed: ${usedSeed}`;
+        document.getElementById('last-seed').style.display = 'inline';
+
+      } catch (e) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+        if (e.name !== 'AbortError') showError('Connection failed: ' + e.message);
+        break;
+      }
+    }
+
+    // Teardown
+    generating = false;
+    clearInterval(pollInterval);
+    pollInterval = null;
+    batchBtn.textContent = 'Batch AR';
+    batchBtn.classList.remove('abort');
+    document.getElementById('gen-btn').disabled    = !backendOnline;
+    document.getElementById('gen-btn').style.opacity = !backendOnline ? '0.4' : '';
+    document.getElementById('progress-overlay').style.display = 'none';
+    document.getElementById('img-actions').style.display      = 'flex';
+    lockControls(false);
+    updateHR(document.getElementById('hr-scale').value);
+  }
+
+  function batchAutoSave(b64, seed, arLabel) {
+    const checkpoint = document.getElementById('model-select')
+      .options[document.getElementById('model-select').selectedIndex]?.text
+      ?.replace(/\.[^.]+$/, '')
+      ?.replace(/[^a-zA-Z0-9_-]/g, '_') || 'unknown';
+    const now = new Date();
+    const ts  = now.getFullYear().toString()
+      + String(now.getMonth() + 1).padStart(2, '0')
+      + String(now.getDate()).padStart(2, '0')
+      + String(now.getHours()).padStart(2, '0')
+      + String(now.getMinutes()).padStart(2, '0')
+      + String(now.getSeconds()).padStart(2, '0');
+    const a = document.createElement('a');
+    a.href     = 'data:image/png;base64,' + b64;
+    a.download = `${checkpoint}-${seed}-${ts}-${arLabel.replace(':', 'x')}.png`;
+    a.click();
+  }
 
   // ── Init ──────────────────────────────────────────────────────────────────
   updateHR(document.getElementById('hr-scale').value);
